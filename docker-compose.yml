@@ -1,0 +1,39 @@
+# CPU-only friendly: pas de bloc GPU (Ollama utilise le CPU si pas de NVIDIA).
+# Avec GPU NVIDIA, Ollama détecte et l'utilise automatiquement dans le conteneur.
+services:
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+
+  # Optionnel : docker compose --profile tunnel up -d (nécessite NGROK_AUTHTOKEN + ngrok-config.yml)
+  ngrok:
+    profiles:
+      - tunnel
+    image: ngrok/ngrok:latest
+    command: start --config /etc/ngrok.yml ollama
+    volumes:
+      - ./ngrok-config.yml:/etc/ngrok.yml:ro
+    ports:
+      - "4040:4040"
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  model-loader:
+    image: ollama/ollama
+    entrypoint: /bin/sh
+    command: >
+      -c "echo 'Waiting for Ollama...' &&
+      until OLLAMA_HOST=http://ollama:11434 ollama list > /dev/null 2>&1; do sleep 2; done &&
+      echo 'Pulling model: ${MODEL:-llama3.2:3b}...' &&
+      OLLAMA_HOST=http://ollama:11434 ollama pull ${MODEL:-llama3.2:3b} &&
+      echo 'Model ready!'"
+    depends_on:
+      - ollama
+
+volumes:
+  ollama_data:

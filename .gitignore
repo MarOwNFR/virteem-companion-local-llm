@@ -1,0 +1,17 @@
+# Variables d'environnement (contient le token Ngrok)
+.env
+
+# Config Ngrok générée par les scripts (contient le token de sécurité)
+ngrok-config.yml
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
