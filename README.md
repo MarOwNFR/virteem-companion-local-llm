@@ -275,6 +275,4 @@ C'est normal en mode CPU.
 └── README.md                 # Ce fichier
 ```
 
-## Licence
 
-Ce projet fait partie de [Virteem Companion](https://github.com/pareaud/virteem-companion-v2).
