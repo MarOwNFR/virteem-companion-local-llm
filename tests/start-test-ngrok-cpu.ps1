@@ -1,13 +1,13 @@
-# Test client : Ollama (CPU) + modele 3B + tunnel Ngrok + token Virteem.
-# Sur petit PC sans GPU : ca ne "explose" pas le PC, mais les reponses peuvent prendre 30s–2 min
-# par generation (normal). Prevoyez ~4–6 Go RAM libres pour llama3.2:3b.
+# Test client: Ollama (CPU) + 3B model + Ngrok tunnel + Virteem token.
+# On a small PC without a GPU, this should remain usable, but responses may take 30s to 2 min
+# per generation, which is expected. Please allow ~4-6 GB of free RAM for llama3.2:3b.
 #
-# Usage (PowerShell, depuis ce dossier) :
-#   Copiez .env.example vers .env et renseignez NGROK_AUTHTOKEN, ou :
-#   $env:NGROK_AUTHTOKEN = "votre_token_ngrok"
+# Usage (PowerShell, from this folder):
+#   Please copy .env.example to .env and define NGROK_AUTHTOKEN, or:
+#   $env:NGROK_AUTHTOKEN = "your_ngrok_token"
 #   .\start-test-ngrok-cpu.ps1
 #
-# Optionnel : $env:MODEL = "qwen2.5:3b"   (defaut : llama3.2:3b)
+# Optional: $env:MODEL = "qwen2.5:3b"   (default: llama3.2:3b)
 
 $ErrorActionPreference = "Stop"
 
@@ -28,7 +28,7 @@ if (Test-Path $envFile) {
 }
 
 if (-not $env:NGROK_AUTHTOKEN) {
-    Write-Host "ERREUR: definissez NGROK_AUTHTOKEN (compte gratuit https://ngrok.com)" -ForegroundColor Red
+    Write-Host "ERROR: Please define NGROK_AUTHTOKEN (free account at https://ngrok.com)." -ForegroundColor Red
     Write-Host '  $env:NGROK_AUTHTOKEN = "xxx"' -ForegroundColor Yellow
     exit 1
 }
@@ -41,12 +41,12 @@ if (-not $env:VIRTEEM_TOKEN) {
 Set-Location $PSScriptRoot
 
 Write-Host ""
-Write-Host "=== Test Ngrok + 3B en CPU ===" -ForegroundColor Cyan
-Write-Host "- Modele : $Model (~2 Go disque, ~4 Go RAM en charge)" -ForegroundColor Gray
-Write-Host "- CPU uniquement : les premieres reponses peuvent etre TRES lentes (c'est normal)." -ForegroundColor Yellow
+Write-Host "=== Ngrok + 3B CPU Test ===" -ForegroundColor Cyan
+Write-Host "- Model: $Model (~2 GB disk, ~4 GB RAM under load)" -ForegroundColor Gray
+Write-Host "- CPU only: the first responses may be VERY slow, which is expected." -ForegroundColor Yellow
 Write-Host ""
 
-# Config ngrok (meme logique que start.bat)
+# Ngrok config using the same logic as start.bat
 $token = $env:VIRTEEM_TOKEN
 $ngrokAuth = $env:NGROK_AUTHTOKEN
 @"
@@ -59,7 +59,7 @@ tunnels:
     traffic_policy:
       on_http_request:
         - expressions:
-            - "req.headers['x-virteem-token'][0] != '$token'"
+            - "!( 'x-virteem-token' in req.headers ) || req.headers['x-virteem-token'][0] != '$token'"
           actions:
             - type: custom-response
               config:
@@ -67,10 +67,10 @@ tunnels:
                 content: Unauthorized - Invalid Virteem token
 "@ | Set-Content -Path "ngrok-config.yml" -Encoding utf8
 
-Write-Host "Demarrage Ollama..." -ForegroundColor Cyan
+Write-Host "Starting Ollama..." -ForegroundColor Cyan
 docker compose up -d ollama
 
-Write-Host "Attente API Ollama (localhost:11434)..."
+Write-Host "Waiting for the Ollama API (localhost:11434)..."
 $deadline = (Get-Date).AddMinutes(3)
 do {
     try {
@@ -80,14 +80,14 @@ do {
     Start-Sleep -Seconds 2
 } while ((Get-Date) -lt $deadline)
 
-Write-Host "Telechargement du modele $Model (long la 1ere fois)..." -ForegroundColor Yellow
+Write-Host "Pulling model $Model (the first run may take a while)..." -ForegroundColor Yellow
 $env:MODEL = $Model
 docker compose run --rm model-loader
 
-Write-Host "Demarrage tunnel Ngrok (profile tunnel)..." -ForegroundColor Cyan
+Write-Host "Starting the Ngrok tunnel (tunnel profile)..." -ForegroundColor Cyan
 docker compose --profile tunnel up -d ngrok
 
-Write-Host "Recuperation de l'URL publique..."
+Write-Host "Retrieving the public URL..."
 Start-Sleep -Seconds 4
 $publicUrl = $null
 for ($i = 0; $i -lt 20; $i++) {
@@ -103,19 +103,19 @@ for ($i = 0; $i -lt 20; $i++) {
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "  COLLEZ DANS VIRTEEM COMPANION (Local)" -ForegroundColor Green
+Write-Host "  PLEASE PASTE INTO VIRTEEM COMPANION" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  URL serveur :  $publicUrl"
+Write-Host "  Server URL   :  $publicUrl"
 Write-Host "  Token        :  $token"
-Write-Host "  Modele       :  $Model"
+Write-Host "  Model        :  $Model"
 Write-Host ""
-Write-Host "  (Inference > Local > Tester puis choisir le modele)" -ForegroundColor Gray
+Write-Host "  (Inference > Local > Test, then select the model)" -ForegroundColor Gray
 Write-Host ""
-Write-Host "  Dashboard ngrok : http://127.0.0.1:4040" -ForegroundColor Gray
-Write-Host "  Arret           : docker compose --profile tunnel down" -ForegroundColor Gray
+Write-Host "  Ngrok dashboard : http://127.0.0.1:4040" -ForegroundColor Gray
+Write-Host "  Stop            : docker compose --profile tunnel down" -ForegroundColor Gray
 Write-Host ""
 
 if (-not $publicUrl) {
-    Write-Host "ATTENTION: URL ngrok non lue (4040). Verifiez le token ngrok et relancez." -ForegroundColor Red
+    Write-Host "WARNING: The Ngrok URL could not be read from port 4040. Please verify the Ngrok token and try again." -ForegroundColor Red
 }

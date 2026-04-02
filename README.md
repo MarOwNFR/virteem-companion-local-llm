@@ -51,10 +51,16 @@ cp .env.example .env
 Ouvrez `.env` dans un éditeur de texte :
 
 ```env
-# OBLIGATOIRE — Votre token Ngrok (récupéré sur https://dashboard.ngrok.com)
+# OPTIONNEL — Utiliser le GPU NVIDIA (yes/no, défaut: yes)
+USE_GPU=yes
+
+# OPTIONNEL — Utiliser Ngrok (yes/no, défaut: yes)
+USE_NGROK=yes
+
+# OBLIGATOIRE si USE_NGROK=yes — Votre token Ngrok
 NGROK_AUTHTOKEN=votre_token_ngrok_ici
 
-# OBLIGATOIRE — Modèle IA à utiliser (voir tableau ci-dessous)
+# OPTIONNEL — Modèle IA à utiliser (voir tableau ci-dessous)
 MODEL=qwen2.5:1.5b
 
 # OPTIONNEL — Token de sécurité fixe (si non défini, un nouveau est généré à chaque lancement)
@@ -67,9 +73,11 @@ MODEL=qwen2.5:1.5b
 
 | Variable | Obligatoire | Description | Où la trouver |
 |----------|:-----------:|-------------|---------------|
-| `NGROK_AUTHTOKEN` | **Oui** | Token d'authentification Ngrok | [Dashboard Ngrok → Your Authtoken](https://dashboard.ngrok.com/get-started/your-authtoken) |
+| `USE_GPU` | Non | Active la réservation GPU NVIDIA via `docker-compose.gpu.yml` (`yes` / `no`, défaut : `yes`) | À définir dans `.env` |
+| `USE_NGROK` | Non | Démarre aussi le tunnel Ngrok (`yes` / `no`, défaut : `yes`) | À définir dans `.env` |
+| `NGROK_AUTHTOKEN` | Oui si `USE_NGROK=yes` | Token d'authentification Ngrok | [Dashboard Ngrok → Your Authtoken](https://dashboard.ngrok.com/get-started/your-authtoken) |
 | `MODEL` | Non | Nom du modèle Ollama à télécharger (défaut : `llama3.2:3b`) | Voir le tableau des modèles ci-dessous |
-| `VIRTEEM_TOKEN` | Non | Token de sécurité pour protéger l'accès au modèle. Si non défini, un token aléatoire est généré à chaque lancement | Affiché dans le terminal après le lancement du script |
+| `VIRTEEM_TOKEN` | Non | Token de sécurité pour protéger l'accès au modèle via Ngrok. Si non défini, un token aléatoire est généré à chaque lancement | Affiché dans le terminal après le lancement du script |
 
 ### Choisir un modèle
 
@@ -86,7 +94,7 @@ MODEL=qwen2.5:1.5b
 
 > **Sans GPU NVIDIA ?** Choisissez `qwen2.5:1.5b` ou `qwen2.5:3b`. Les réponses seront plus lentes (10–60 secondes) mais tout fonctionne en CPU pur.
 >
-> **Avec GPU NVIDIA ?** Ollama le détecte et l'utilise automatiquement. Vous pouvez choisir des modèles plus gros (7B+). Installez [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) si ce n'est pas déjà fait.
+> **Avec GPU NVIDIA ?** Laissez `USE_GPU=yes`. Le script ajoutera automatiquement `docker-compose.gpu.yml` avec la réservation GPU NVIDIA. Vous pouvez choisir des modèles plus gros (7B+). Installez [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) si ce n'est pas déjà fait. (Ou sur Windows, suivre cette documentation: [GPU support in Docker Desktop for Windows](https://docs.docker.com/desktop/features/gpu/).)
 
 ---
 
@@ -95,7 +103,7 @@ MODEL=qwen2.5:1.5b
 ### Windows — PowerShell (recommandé)
 
 ```powershell
-.\start-test-ngrok-cpu.ps1
+.\start.ps1
 ```
 
 ### Windows — CMD
@@ -111,17 +119,20 @@ chmod +x start.sh
 ./start.sh
 ```
 
-### Ollama seul (sans Ngrok, pour usage local uniquement)
+### Exemples d'options
 
 ```powershell
-.\start-ollama-cpu.ps1
+$env:USE_GPU = "no"
+$env:USE_NGROK = "no"
+.\start.ps1
 ```
 
 Le script va :
 1. Démarrer le serveur Ollama dans Docker
-2. Télécharger le modèle (uniquement la première fois — peut prendre plusieurs minutes)
-3. Lancer le tunnel Ngrok
-4. Afficher les informations de connexion
+2. Attendre qu'Ollama soit accessible
+3. Télécharger le modèle avec `docker exec` (uniquement la première fois — peut prendre plusieurs minutes)
+4. Lancer le tunnel Ngrok si `USE_NGROK=yes`
+5. Afficher les informations de connexion
 
 ### Résultat attendu
 
@@ -137,6 +148,8 @@ Le script va :
 ```
 
 **Gardez cette fenêtre ouverte** — le serveur doit rester actif pendant l'utilisation.
+
+Si `USE_NGROK=no`, le script affiche l'URL locale `http://127.0.0.1:11434` au lieu d'une URL Ngrok et ne génère pas `ngrok-config.yml`.
 
 ---
 
@@ -161,7 +174,7 @@ Le script va :
 | Information | Où la trouver |
 |-------------|---------------|
 | **Ngrok Authtoken** | [dashboard.ngrok.com → Your Authtoken](https://dashboard.ngrok.com/get-started/your-authtoken) |
-| **URL du tunnel** | Affichée dans le terminal après lancement, ou sur http://localhost:4040 |
+| **URL du tunnel** | Affichée dans le terminal après lancement, ou sur http://127.0.0.1:4040 |
 | **Token de sécurité** | Affiché dans le terminal. Généré automatiquement à chaque démarrage sauf si `VIRTEEM_TOKEN` est défini dans `.env` |
 | **Modèle actif** | Affiché dans le terminal, ou via `docker compose exec ollama ollama list` |
 
@@ -176,23 +189,23 @@ docker ps
 # Voir les logs en temps réel
 docker compose logs -f
 
-# Suivre le téléchargement du modèle
-docker compose logs -f model-loader
-
 # Lister les modèles installés
 docker compose exec ollama ollama list
 
 # Ajouter un modèle supplémentaire
-docker compose exec ollama ollama pull mistral
+docker compose exec ollama ollama pull <model name>
 
-# Arrêter tout
+# Arrêter Ollama seul
+docker compose down
+
+# Arrêter Ollama + Ngrok
 docker compose --profile tunnel down
 
 # Arrêter et supprimer les modèles (libérer l'espace disque)
 docker compose --profile tunnel down -v
 
 # Dashboard Ngrok (stats, URL, requêtes)
-# http://localhost:4040
+# http://127.0.0.1:4040
 ```
 
 ---
@@ -226,7 +239,7 @@ Le fichier `.env` ne contient pas de token Ngrok.
 
 - Vérifiez que **Docker Desktop est lancé**
 - Vérifiez que le **script tourne toujours** (ne fermez pas le terminal)
-- Ouvrez http://localhost:4040 — si la page ne charge pas, Ngrok n'est pas actif
+- Si `USE_NGROK=yes`, ouvrez http://127.0.0.1:4040 — si la page ne charge pas, Ngrok n'est pas actif
 - Relancez le script
 
 ### "Token de sécurité invalide" (erreur 403)
@@ -242,7 +255,7 @@ Le token dans Virteem Companion ne correspond pas à celui du script.
 C'est normal en mode CPU.
 
 - Utilisez un modèle plus petit (`qwen2.5:1.5b`)
-- Si vous avez un **GPU NVIDIA**, installez [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+- Si vous avez un **GPU NVIDIA**, installez [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html). Ou sur Windows, suivre cette documentation: [GPU support in Docker Desktop for Windows](https://docs.docker.com/desktop/features/gpu/)
 - Fermez les applications gourmandes en mémoire
 
 ### "Out of memory"
@@ -267,11 +280,11 @@ C'est normal en mode CPU.
 ```
 .
 ├── .env.example              # Variables d'environnement (à copier en .env)
-├── docker-compose.yml        # Services Docker (Ollama + Ngrok + model-loader)
+├── docker-compose.yml        # Services Docker (Ollama + Ngrok)
+├── docker-compose.gpu.yml    # Réservation GPU NVIDIA optionnelle pour Ollama
+├── start.ps1                 # Script de lancement Windows PowerShell (recommandé)
 ├── start.sh                  # Script de lancement Linux / macOS
 ├── start.bat                 # Script de lancement Windows CMD
-├── start-ollama-cpu.ps1      # Ollama seul en CPU (sans Ngrok)
-├── start-test-ngrok-cpu.ps1  # Ollama + Ngrok en CPU (PowerShell)
 └── README.md                 # Ce fichier
 ```
 

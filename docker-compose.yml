@@ -1,5 +1,3 @@
-# CPU-only friendly: pas de bloc GPU (Ollama utilise le CPU si pas de NVIDIA).
-# Avec GPU NVIDIA, Ollama détecte et l'utilise automatiquement dans le conteneur.
 services:
   ollama:
     image: ollama/ollama
@@ -22,18 +20,6 @@ services:
     depends_on:
       - ollama
     restart: unless-stopped
-
-  model-loader:
-    image: ollama/ollama
-    entrypoint: /bin/sh
-    command: >
-      -c "echo 'Waiting for Ollama...' &&
-      until OLLAMA_HOST=http://ollama:11434 ollama list > /dev/null 2>&1; do sleep 2; done &&
-      echo 'Pulling model: ${MODEL:-llama3.2:3b}...' &&
-      OLLAMA_HOST=http://ollama:11434 ollama pull ${MODEL:-llama3.2:3b} &&
-      echo 'Model ready!'"
-    depends_on:
-      - ollama
 
 volumes:
   ollama_data:
